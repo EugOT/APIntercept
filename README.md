@@ -6,15 +6,18 @@
 
 ---
 
-Reverse-engineers any website by doing a breadth search across every transport (JSON, WebSocket, WebRTC, GraphQL, SSE, HLS, PubSub), listing them all, and generating a typed JSON API that bypasses almost all bot protections — including Turnstile. I didn't include the ability, but it bypassed the most advanced ChatGPT + Turnstile. Built with self-improving Claude Code agents that rewrite their own instructions until fresh agents consistently succeed.
+Reverse-engineers authorized web properties by doing a breadth search across transports (JSON, WebSocket, WebRTC, GraphQL, SSE, HLS, PubSub), listing them, and generating a typed JSON API for debugging, integration, and internal automation. Built with self-improving Claude Code agents that rewrite their own instructions until fresh agents consistently succeed.
 
 Once connected to a page, it intercepts every byte of network traffic — then actively drives the page to surface endpoints that only fire on interaction. It types into forms, clicks buttons, scrolls, triggers modals, paginates, submits searches, and walks through multi-step flows, watching what each action produces on the wire. Every request gets captured with its method, headers, payload shape, and response, then classified by transport (JSON, WebSocket, WebRTC, GraphQL, SSE, HLS, PubSub). The result is a complete map of the site's real API surface — including the hidden endpoints that only exist behind a click — turned into typed proxy routes you can curl.
+
+Use this only against sites you own, operate, or have explicit written authorization to test. Production deployments require a control-plane token and explicit allowed origins for browser, WebSocket, Python bridge, and generated API routes.
 
 ---
 
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- Bun 1.3.3 for JavaScript workspaces and Pixi 0.70+ for Python worker tests
 
 ## Getting Started
 
@@ -142,9 +145,17 @@ Iteration 44: Two-pass strategy doubles transport coverage (2.1 → 4.3 avg)
               → 70+ routes, new transports: WS, SSE, HLS, PubSub
 ```
 
+## Security Defaults
+
+- Production API startup requires `INTERCEPTOR_CONTROL_TOKEN`.
+- Production CORS is restricted to `INTERCEPTOR_ALLOWED_ORIGINS`.
+- Browser and dashboard WebSocket upgrades enforce Origin, token, payload, and rate limits.
+- Captured traffic redacts sensitive headers and secret-like body fields before buffering.
+- Request body capture is disabled by default with `INTERCEPTOR_CAPTURE_REQUEST_BODIES=false`.
+
 ## Tech Stack
 
-TypeScript · Hono · Next.js · Patchright · Turborepo · pnpm · Vitest · Biome · Claude Code
+TypeScript · Hono · Next.js · Patchright · Turborepo · Bun · Pixi · Vitest · Biome · Claude Code
 
 ## License
 

@@ -1,0 +1,13 @@
+[workspace]
+authors = ["Evgenii Tretiakov <evgenii.o.tretiakov@gmail.com>"]
+channels = ["conda-forge"]
+name = "interceptor"
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64"]
+version = "0.1.0"
+
+[tasks]
+python-test = "python -m pytest services/python -v"
+
+[dependencies]
+python = ">=3.12,<3.14"
+pytest = ">=8.4,<9"

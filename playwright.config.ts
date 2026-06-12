@@ -22,7 +22,7 @@ export default defineConfig({
 	},
 
 	use: {
-		baseURL: `http://localhost:${E2E_PORT}`,
+		baseURL: `http://127.0.0.1:${E2E_PORT}`,
 		trace: 'on-first-retry',
 		actionTimeout: 15_000,
 	},
@@ -37,7 +37,7 @@ export default defineConfig({
 	// Single webServer — Next.js handles both pages and API routes
 	// IMPORTANT: Use `port` not `url` for readiness check — `url` can hang
 	webServer: {
-		command: `pnpm --filter @interceptor/web dev --port ${E2E_PORT}`,
+		command: `bun run --filter @interceptor/web dev --hostname 127.0.0.1 --port ${E2E_PORT}`,
 		port: E2E_PORT,
 		reuseExistingServer: !IS_CI,
 		timeout: 120_000, // Next.js cold start can be slow

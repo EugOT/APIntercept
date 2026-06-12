@@ -1,14 +1,14 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * API Client Code Generator CLI
  *
- * Usage: pnpm codegen <domain> --output <path>
+ * Usage: bun run --filter @interceptor/browser codegen <domain> --output <path>
  *
  * Examples:
- * - pnpm codegen boardshop
- * - pnpm codegen boardshop --output ./generated/boardshop-client.ts
- * - pnpm codegen deckmarket --server http://localhost:3001
+ * - bun run --filter @interceptor/browser codegen boardshop
+ * - bun run --filter @interceptor/browser codegen boardshop --output ./generated/boardshop-client.ts
+ * - bun run --filter @interceptor/browser codegen deckmarket --server http://localhost:3001
  *
  * @module browser/codegen/cli
  */
@@ -31,7 +31,9 @@ function parseArgs(args: string[]): {
 } {
 	const domain = args[0];
 	if (!domain) {
-		console.error('Usage: pnpm codegen <domain> [--output path] [--traffic path] [--verbose]');
+		console.error(
+			'Usage: bun run --filter @interceptor/browser codegen <domain> [--output path] [--traffic path] [--verbose]',
+		);
 		process.exit(1);
 	}
 

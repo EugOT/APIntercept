@@ -6,8 +6,8 @@
  * POST responses to collect all paginated data.
  *
  * Usage:
- *   pnpm --filter @interceptor/test-server start  # Start test-server on 4444
- *   npx tsx scripts/examples/click-intercept.ts
+ *   bun run --filter @interceptor/test-server start  # Start test-server on 4444
+ *   bun run tsx scripts/examples/click-intercept.ts
  *
  * The pattern:
  *   1. Launch Patchright browser

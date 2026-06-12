@@ -1,8 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Browser MCP Server Entry Point
  *
- * Run via: node packages/browser/src/mcp/index.ts
+ * Run via: bun packages/browser/src/mcp/index.ts
  *
  * This process communicates with Claude Code via stdio (JSON-RPC).
  * NEVER log to stdout — use console.error for all diagnostics.

@@ -20,22 +20,23 @@ shift
 
 case "$FILE" in
   *.ts|*.tsx)
-    # pnpm strict isolation requires the script to be inside the package
+    # Keep temporary TS files inside a workspace so Bun resolves local deps consistently.
     # Copy to packages/browser, run, then clean up
     BASENAME="$(basename "$FILE")"
     cp "$FILE" "$PROJECT_DIR/packages/browser/_tmp_${BASENAME}"
     cd "$PROJECT_DIR/packages/browser"
-    npx tsx "_tmp_${BASENAME}" "$@"
+    bun run tsx "_tmp_${BASENAME}" "$@"
     EXIT_CODE=$?
     rm -f "_tmp_${BASENAME}"
     exit $EXIT_CODE
     ;;
   *.py)
-    exec python3 "$FILE" "$@"
+    cd "$PROJECT_DIR"
+    exec pixi run python "$FILE" "$@"
     ;;
   *.js|*.cjs|*.mjs)
     cd "$PROJECT_DIR"
-    exec node "$FILE" "$@"
+    exec bun "$FILE" "$@"
     ;;
   *)
     echo "Unknown file type: $FILE"

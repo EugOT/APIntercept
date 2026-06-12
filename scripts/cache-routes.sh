@@ -16,71 +16,74 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Precondition: verify API server is reachable
-if ! curl -sf --max-time 5 "http://localhost:${PORT}/api" > /dev/null 2>&1; then
+API_BASE="http://localhost:${PORT}"
+AUTH_ARGS=()
+if [[ -n "${INTERCEPTOR_CONTROL_TOKEN:-}" ]]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${INTERCEPTOR_CONTROL_TOKEN}")
+fi
+
+api_get() {
+  curl -sf "${AUTH_ARGS[@]}" "$1"
+}
+
+if ! api_get "${API_BASE}/api" > /dev/null 2>&1; then
   echo "ERROR: API server not reachable at localhost:${PORT}. Start it first."
   exit 1
 fi
 
-# Precondition: verify requested domain is registered
+ROUTES_JSON=$(api_get "${API_BASE}/api")
+
 if [ -n "$DOMAIN" ]; then
-  if ! curl -s "http://localhost:${PORT}/api" | python3 -c "import sys,json; d=json.load(sys.stdin); names=[x['name'] for x in d.get('domains',[])]; exit(0 if '${DOMAIN}' in names else 1)" 2>/dev/null; then
+  if ! printf "%s" "$ROUTES_JSON" | DOMAIN="$DOMAIN" bun -e '
+    const data = JSON.parse(await Bun.stdin.text());
+    const names = data.domains?.map((domain) => domain.name) ?? [];
+    process.exit(names.includes(process.env.DOMAIN) ? 0 : 1);
+  ' 2>/dev/null; then
     echo "ERROR: Domain '${DOMAIN}' is not registered on localhost:${PORT}."
-    echo "Registered domains: $(curl -s "http://localhost:${PORT}/api" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(x['name'] for x in d.get('domains',[])))")"
+    printf "Registered domains: "
+    printf "%s" "$ROUTES_JSON" | bun -e '
+      const data = JSON.parse(await Bun.stdin.text());
+      console.log((data.domains?.map((domain) => domain.name) ?? []).join(", "));
+    '
     exit 1
   fi
 fi
 
-# Get all domains and routes from the API index
-ROUTES_JSON=$(curl -s "http://localhost:${PORT}/api")
+printf "%s" "$ROUTES_JSON" | \
+  PORT="$PORT" DOMAIN="$DOMAIN" CACHE_DIR="$CACHE_DIR" INTERCEPTOR_CONTROL_TOKEN="${INTERCEPTOR_CONTROL_TOKEN:-}" bun -e '
+const data = JSON.parse(await Bun.stdin.text());
+const port = process.env.PORT;
+const domainFilter = process.env.DOMAIN;
+const cacheDir = process.env.CACHE_DIR;
+const token = process.env.INTERCEPTOR_CONTROL_TOKEN;
 
-echo "$ROUTES_JSON" | python3 -c "
-import json, sys, subprocess, os
+for (const domain of data.domains ?? []) {
+  const name = domain.name ?? "";
+  if (domainFilter && name !== domainFilter) continue;
 
-data = json.load(sys.stdin)
-port = '${PORT}'
-domain_filter = '${DOMAIN}'
-cache_dir = '${CACHE_DIR}'
+  const domainDir = `${cacheDir}/${name}`;
+  await Bun.$`mkdir -p ${domainDir}`.quiet();
+  console.log(`Caching ${name}...`);
 
-for domain in data.get('domains', []):
-    name = domain.get('name', '')
-    if domain_filter and name != domain_filter:
-        continue
+  for (const route of domain.routes ?? []) {
+    const [method, path] = String(route).split(" ", 2);
+    if (method !== "GET" || !path) continue;
+    if (path.includes(":")) {
+      console.log(`  SKIP ${path} (needs params)`);
+      continue;
+    }
 
-    os.makedirs(f'{cache_dir}/{name}', exist_ok=True)
-    print(f'Caching {name}...')
+    const cacheName = path.replace(`/api/${name}/`, "").replaceAll("/", "-") || "index";
+    let url = `http://localhost:${port}${path}`;
+    if (path.includes("search") && !url.includes("?")) url += "?q=test";
 
-    for route in domain.get('routes', []):
-        parts = route.split(' ', 1)
-        if len(parts) != 2:
-            continue
-        method, path = parts
+    console.log(`  GET ${path} -> ${domainDir}/${cacheName}.json`);
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    await Bun.write(`${domainDir}/${cacheName}.json`, await response.text());
+  }
+}
 
-        if method != 'GET':
-            continue
-
-        # Skip routes with unresolved path params
-        if ':' in path:
-            print(f'  SKIP {path} (needs params)')
-            continue
-
-        # Generate cache filename from path
-        cache_name = path.replace(f'/api/{name}/', '').replace('/', '-') or 'index'
-
-        url = f'http://localhost:{port}{path}'
-
-        # Add default query params for search routes
-        if 'search' in path and '?' not in url:
-            url += '?q=test'
-
-        print(f'  GET {path} -> {cache_dir}/{name}/{cache_name}.json')
-        result = subprocess.run(
-            ['curl', '-s', '--max-time', '30', url],
-            capture_output=True, text=True
-        )
-        outpath = f'{cache_dir}/{name}/{cache_name}.json'
-        with open(outpath, 'w') as f:
-            f.write(result.stdout)
-
-print('Done.')
-"
+console.log("Done.");
+'

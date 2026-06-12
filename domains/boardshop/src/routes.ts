@@ -3,7 +3,7 @@
  *
  * Every transport type in the discovery protocol has a working route here.
  * All routes work against the test server (port 4444):
- *   pnpm --filter @interceptor/test-server start
+ *   bun run --filter @interceptor/test-server start
  *
  * ═══════════════════════════════════════════════════════════════════════
  * REAL-WORLD ANALOGUE GUIDE

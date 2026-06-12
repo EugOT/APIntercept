@@ -27,11 +27,11 @@ sleep 1
 
 # Start servers
 if [ "$WEB_ONLY" = false ]; then
-  pnpm --filter @interceptor/api dev > /tmp/api-server.log 2>&1 &
+  bun run --filter @interceptor/api dev > /tmp/api-server.log 2>&1 &
   echo "API server starting on port 3001..."
 fi
 if [ "$API_ONLY" = false ]; then
-  pnpm --filter @interceptor/web dev > /tmp/web-server.log 2>&1 &
+  bun run --filter @interceptor/web dev > /tmp/web-server.log 2>&1 &
   echo "Web server starting on port 3000..."
 fi
 

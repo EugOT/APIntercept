@@ -2,17 +2,6 @@ import type { IncomingMessage } from 'node:http';
 import { createServer } from 'node:http';
 import type { Socket } from 'node:net';
 
-// Global exception handlers — prevent silent crashes during discovery agent runs.
-// Without these, unhandled promise rejections (browser CDP errors, WebSocket race conditions)
-// kill the process silently with no log output.
-process.on('unhandledRejection', (reason) => {
-	console.error('[FATAL] Unhandled rejection:', reason);
-});
-process.on('uncaughtException', (err) => {
-	console.error('[FATAL] Uncaught exception:', err);
-	// Don't exit — keep the server running so agents can recover
-});
-
 import { analyzeDiscovery } from '@interceptor/browser/analysis/discovery';
 import {
 	autoStartHeadlessBrowser,
@@ -32,7 +21,7 @@ import {
 	validateConfig,
 	waitForRateLimitSlot,
 } from '@interceptor/shared';
-import { Hono } from 'hono';
+import { type Context, Hono, type Next } from 'hono';
 import { cors } from 'hono/cors';
 import { WSContext } from 'hono/ws';
 import type { WebSocket } from 'ws';
@@ -49,6 +38,15 @@ connectBrowserRateLimiter({
 import { getBridge } from './bridge';
 import { browserMcp } from './browser-mcp';
 import { formatStartupBanner } from './format';
+import {
+	CONTROL_TOKEN_HEADER,
+	createSecurityConfig,
+	isAllowedOrigin,
+	isAuthorizedRequest,
+	isAuthorizedUpgrade,
+	PayloadTooLargeError,
+	readRequestBody,
+} from './security';
 import { addClient, getState, removeClient, resetState, setMultiplier, setRunning } from './state';
 
 const config = validateConfig({
@@ -56,10 +54,31 @@ const config = validateConfig({
 	version: '0.0.1',
 	environment: process.env.NODE_ENV ?? 'development',
 });
+const securityConfig = createSecurityConfig();
+
+async function requireControlPlaneAuth(c: Context, next: Next) {
+	if (isAuthorizedRequest(c.req.raw, securityConfig)) {
+		await next();
+		return;
+	}
+
+	c.header('WWW-Authenticate', 'Bearer');
+	return c.json({ error: 'Unauthorized' }, 401);
+}
 
 // Create Hono app for REST routes
 const app = new Hono();
-app.use('/*', cors());
+app.use(
+	'/*',
+	cors({
+		origin: (origin) => (isAllowedOrigin(origin, securityConfig) ? origin : ''),
+		allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+		allowHeaders: ['Content-Type', 'Authorization', CONTROL_TOKEN_HEADER],
+		exposeHeaders: ['Content-Length'],
+		maxAge: 600,
+		credentials: false,
+	}),
+);
 
 // Request timeout middleware — browser navigation can take 60s+, cap at 120s
 app.use('/*', async (c, next) => {
@@ -81,6 +100,10 @@ app.use('/*', async (c, next) => {
 });
 
 app.get('/health', (c) => c.json({ status: 'ok' }));
+
+app.use('/browser/*', requireControlPlaneAuth);
+app.use('/api', requireControlPlaneAuth);
+app.use('/api/*', requireControlPlaneAuth);
 
 // Browser endpoints — traffic capture for API discovery
 app.get('/browser/health', (c) => c.json(getBrowserHealth()));
@@ -161,24 +184,27 @@ app.post('/api/python/:method', async (c) => {
 	}
 });
 
+function toFetchHeaders(headers: IncomingMessage['headers']): Headers {
+	const normalized = new Headers();
+	for (const [name, value] of Object.entries(headers)) {
+		if (Array.isArray(value)) {
+			for (const item of value) normalized.append(name, item);
+		} else if (value !== undefined) {
+			normalized.set(name, value);
+		}
+	}
+	return normalized;
+}
+
 // Create Node.js HTTP server
 const server = createServer(async (req, res) => {
 	try {
-		let body: string | undefined;
-		if (!['GET', 'HEAD'].includes(req.method ?? 'GET')) {
-			const chunks: Buffer[] = [];
-			await new Promise<void>((resolve, reject) => {
-				req.on('data', (chunk) => chunks.push(chunk));
-				req.on('end', () => resolve());
-				req.on('error', reject);
-			});
-			body = Buffer.concat(chunks).toString();
-		}
+		const body = await readRequestBody(req, securityConfig.maxHttpBodyBytes);
 
 		const response = await app.fetch(
 			new Request(`http://${req.headers.host}${req.url}`, {
 				method: req.method,
-				headers: req.headers as Record<string, string>,
+				headers: toFetchHeaders(req.headers),
 				body,
 			}),
 		);
@@ -191,6 +217,12 @@ const server = createServer(async (req, res) => {
 		const buffer = await response.arrayBuffer();
 		res.end(Buffer.from(buffer));
 	} catch (err) {
+		if (err instanceof PayloadTooLargeError) {
+			res.statusCode = 413;
+			res.setHeader('content-type', 'application/json');
+			res.end(JSON.stringify({ error: err.message }));
+			return;
+		}
 		console.error('[api] Request error:', err instanceof Error ? err.message : err);
 		res.statusCode = 500;
 		res.end(JSON.stringify({ error: 'Internal Server Error' }));
@@ -198,7 +230,32 @@ const server = createServer(async (req, res) => {
 });
 
 // Create WebSocket server
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({
+	noServer: true,
+	maxPayload: securityConfig.wsMaxPayloadBytes,
+});
+
+function rejectUpgrade(socket: Socket, status: number, message: string): void {
+	socket.write(
+		`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n${message}`,
+	);
+	socket.destroy();
+}
+
+function createWsRateLimiter() {
+	let windowStartedAt = Date.now();
+	let count = 0;
+
+	return () => {
+		const now = Date.now();
+		if (now - windowStartedAt >= 60_000) {
+			windowStartedAt = now;
+			count = 0;
+		}
+		count += 1;
+		return count <= securityConfig.wsMessagesPerMinute;
+	};
+}
 
 // WebSocket client adapter for state management
 class WSClientAdapter {
@@ -228,11 +285,28 @@ class WSClientAdapter {
 // Handle WebSocket upgrade requests
 server.on('upgrade', async (req: IncomingMessage, socket: Socket, head: Buffer) => {
 	const url = req.url || '';
-	const pathname = new URL(`http://localhost${url}`).pathname;
+	const requestUrl = new URL(`http://${req.headers.host ?? 'localhost'}${url}`);
+	const pathname = requestUrl.pathname;
 
 	try {
+		if (pathname !== '/ws' && !pathname.startsWith('/browser/stream')) {
+			rejectUpgrade(socket, 404, 'Not Found');
+			return;
+		}
+
+		if (!isAllowedOrigin(req.headers.origin, securityConfig)) {
+			rejectUpgrade(socket, 403, 'Forbidden');
+			return;
+		}
+
+		if (!isAuthorizedUpgrade(req, requestUrl, securityConfig)) {
+			rejectUpgrade(socket, 401, 'Unauthorized');
+			return;
+		}
+
 		wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
 			if (pathname === '/ws') {
+				const allowMessage = createWsRateLimiter();
 				// Dashboard state management WebSocket
 				const adapter = new WSClientAdapter(ws);
 				const wsContext = new WSContext({
@@ -250,6 +324,10 @@ server.on('upgrade', async (req: IncomingMessage, socket: Socket, head: Buffer) 
 
 				ws.on('message', async (data: Buffer) => {
 					try {
+						if (!allowMessage()) {
+							ws.close(1008, 'Rate limit exceeded');
+							return;
+						}
 						const msg = JSON.parse(data.toString());
 
 						if (msg.type === 'compute') {
@@ -311,7 +389,6 @@ server.on('upgrade', async (req: IncomingMessage, socket: Socket, head: Buffer) 
 				});
 			} else if (pathname.startsWith('/browser/stream')) {
 				// Browser streaming — launches Patchright, streams frames, captures traffic
-				const requestUrl = new URL(`http://localhost${url}`);
 				handleBrowserWebSocket(ws, requestUrl).catch((err) => {
 					console.error('Browser handler error:', err);
 				});
@@ -328,7 +405,36 @@ server.on('upgrade', async (req: IncomingMessage, socket: Socket, head: Buffer) 
 console.log(formatStartupBanner(config));
 
 const port = parseInt(process.env.PORT ?? '3001', 10);
-server.listen(port, () => {
+const host = process.env.HOST ?? '0.0.0.0';
+
+let shuttingDown = false;
+function shutdown(reason: string, err?: unknown, exitCode = 1): void {
+	if (shuttingDown) return;
+	shuttingDown = true;
+
+	if (err) console.error(`[FATAL] ${reason}:`, err);
+	else console.error(`[shutdown] ${reason}`);
+
+	wss.close();
+	server.close(() => {
+		process.exit(exitCode);
+	});
+
+	setTimeout(() => {
+		process.exit(exitCode);
+	}, 5_000).unref();
+}
+
+process.on('unhandledRejection', (reason) => {
+	shutdown('Unhandled rejection', reason);
+});
+process.on('uncaughtException', (err) => {
+	shutdown('Uncaught exception', err);
+});
+process.on('SIGTERM', () => shutdown('SIGTERM', undefined, 0));
+process.on('SIGINT', () => shutdown('SIGINT', undefined, 0));
+
+server.listen(port, host, () => {
 	console.log(`Server listening on http://localhost:${port}`);
 	// Auto-start a headless browser so domain proxy routes (extractFromPage, browserFetch)
 	// work immediately without requiring manual connection via the /browser dashboard.

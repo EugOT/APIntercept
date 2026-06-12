@@ -2,8 +2,10 @@
 export interface PythonBridgeConfig {
 	/** Path to the Python worker script */
 	workerPath: string;
-	/** Python executable (default: 'python3') */
+	/** Python executable (default: INTERCEPTOR_PYTHON/PIXI_PYTHON, otherwise pixi) */
 	pythonPath?: string;
+	/** Arguments inserted before "-u <workerPath>" (default: ["run", "python"] for pixi) */
+	pythonArgs?: string[];
 	/** Timeout per request in ms (default: 5000) */
 	timeoutMs?: number;
 	/** Startup timeout in ms (default: 5000) */

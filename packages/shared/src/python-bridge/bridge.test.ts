@@ -1,9 +1,11 @@
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PythonBridge } from './bridge';
 import { BridgeError } from './types';
 
 const WORKER_PATH = resolve(__dirname, '../../../../services/python/worker.py');
+
+vi.setConfig({ testTimeout: 15_000 });
 
 describe('PythonBridge', () => {
 	let bridge: PythonBridge;

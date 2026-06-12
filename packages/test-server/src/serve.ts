@@ -1,6 +1,6 @@
 /**
  * Standalone test server entry point.
- * Run: pnpm --filter @interceptor/test-server start
+ * Run: bun run --filter @interceptor/test-server start
  */
 
 import { createTestServer } from './index';
