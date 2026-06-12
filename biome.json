@@ -59,6 +59,7 @@
 			"!**/coverage",
 			"!**/test-results",
 			"!**/data",
+			"!**/.pixi",
 			"!**/.venv",
 			"!**/next-env.d.ts",
 			"!apps/api/src/browser.ts"

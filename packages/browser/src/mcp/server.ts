@@ -16,9 +16,31 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import type { AnySchema } from '@modelcontextprotocol/sdk/server/zod-compat.js';
+import { z } from 'zod/v3';
 
 const API_BASE = process.env.INTERCEPTOR_API_URL || 'http://localhost:3001';
+
+type ToolFieldSchema = {
+	min: (value: number) => ToolFieldSchema;
+	max: (value: number) => ToolFieldSchema;
+	optional: () => ToolFieldSchema;
+	describe: (description: string) => ToolFieldSchema;
+};
+
+type ToolShape = Record<string, ToolFieldSchema>;
+
+const zod = z as unknown as {
+	object: (shape: ToolShape) => AnySchema;
+	string: () => ToolFieldSchema;
+	number: () => ToolFieldSchema;
+	boolean: () => ToolFieldSchema;
+	enum: (values: readonly [string, ...string[]]) => ToolFieldSchema;
+};
+
+function toolSchema(shape: ToolShape): AnySchema {
+	return zod.object(shape);
+}
 
 /** Call a REST endpoint on the Interceptor API */
 async function apiCall(path: string, method = 'GET', body?: unknown) {
@@ -87,8 +109,8 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Take a screenshot of the current browser viewport. Returns a JPEG image of what the browser is showing right now. The browser must be connected via the dashboard first.',
-			inputSchema: z.object({
-				quality: z
+			inputSchema: toolSchema({
+				quality: zod
 					.number()
 					.min(1)
 					.max(100)
@@ -118,8 +140,8 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Navigate the browser to a URL. Waits for the page to start loading before returning.',
-			inputSchema: z.object({
-				url: z.string().describe('The URL to navigate to (e.g., "https://example.com")'),
+			inputSchema: toolSchema({
+				url: zod.string().describe('The URL to navigate to (e.g., "https://example.com")'),
 			}),
 		},
 		async (args: { url: string }) => {
@@ -141,10 +163,10 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Click at x,y coordinates in the browser viewport (1024x576). Take a screenshot first to see the page and determine click coordinates.',
-			inputSchema: z.object({
-				x: z.number().describe('X coordinate (0-1024)'),
-				y: z.number().describe('Y coordinate (0-576)'),
-				button: z
+			inputSchema: toolSchema({
+				x: zod.number().describe('X coordinate (0-1024)'),
+				y: zod.number().describe('Y coordinate (0-576)'),
+				button: zod
 					.enum(['left', 'right', 'middle'])
 					.optional()
 					.describe('Mouse button (default: left)'),
@@ -173,8 +195,8 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Type text into the currently focused element in the browser. Click on an input field first to focus it.',
-			inputSchema: z.object({
-				text: z.string().describe('The text to type'),
+			inputSchema: toolSchema({
+				text: zod.string().describe('The text to type'),
 			}),
 		},
 		async (args: { text: string }) => {
@@ -195,11 +217,11 @@ export function createBrowserMcpServer(): McpServer {
 		'browser_scroll',
 		{
 			description: 'Scroll the browser page. Positive deltaY scrolls down, negative scrolls up.',
-			inputSchema: z.object({
-				x: z.number().describe('X coordinate to scroll at (0-1024)'),
-				y: z.number().describe('Y coordinate to scroll at (0-576)'),
-				deltaX: z.number().optional().describe('Horizontal scroll pixels (default 0)'),
-				deltaY: z
+			inputSchema: toolSchema({
+				x: zod.number().describe('X coordinate to scroll at (0-1024)'),
+				y: zod.number().describe('Y coordinate to scroll at (0-576)'),
+				deltaX: zod.number().optional().describe('Horizontal scroll pixels (default 0)'),
+				deltaY: zod
 					.number()
 					.optional()
 					.describe('Vertical scroll pixels (positive=down, default 300)'),
@@ -229,8 +251,8 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Press a keyboard key (Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, etc.)',
-			inputSchema: z.object({
-				key: z
+			inputSchema: toolSchema({
+				key: zod
 					.string()
 					.describe(
 						'Key name: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown',
@@ -256,8 +278,8 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Execute JavaScript in the browser page context. Returns the result. Useful for reading page content, checking element states, or extracting data.',
-			inputSchema: z.object({
-				script: z
+			inputSchema: toolSchema({
+				script: zod
 					.string()
 					.describe(
 						'JavaScript to evaluate in the page (e.g., "document.title" or "document.querySelector(\'h1\').textContent")',
@@ -286,14 +308,14 @@ export function createBrowserMcpServer(): McpServer {
 		{
 			description:
 				'Get intercepted API traffic (requests + responses) captured via Chrome DevTools Protocol (CDP) route interception. Returns all HTTP requests and responses made by the browser. Use this after navigating to analyze what API endpoints the web frontend is calling and extract headers/tokens.',
-			inputSchema: z.object({
-				since: z
+			inputSchema: toolSchema({
+				since: zod
 					.number()
 					.optional()
 					.describe(
 						'Only return entries after this Unix timestamp (ms). Omit to get all buffered traffic.',
 					),
-				clear: z
+				clear: zod
 					.boolean()
 					.optional()
 					.describe('Set to true to clear the traffic buffer after reading'),

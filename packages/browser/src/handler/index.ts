@@ -24,11 +24,34 @@ import type { GenericInterceptor } from '../shared/interceptor.js';
 import { GenericSessionManager } from '../shared/session-manager.js';
 import type { InterceptedRequest, InterceptedResponse } from '../shared/types.js';
 import { type DomainPlugin, getDomain } from './domain-loader.js';
+import { createTrafficEntry, type TrafficEntry, trafficOptionsFromEnv } from './traffic.js';
 
 // --- Constants ---
 
 const VIEWPORT_WIDTH = 1024;
 const VIEWPORT_HEIGHT = 576;
+const MAX_WS_TEXT_LENGTH = positiveInt(process.env.INTERCEPTOR_WS_MAX_TEXT_LENGTH, 4096);
+const WS_MESSAGES_PER_MINUTE = positiveInt(process.env.INTERCEPTOR_WS_MESSAGES_PER_MINUTE, 120);
+
+const BROWSER_WS_MESSAGE_TYPES = new Set([
+	'navigate',
+	'mousemove',
+	'click',
+	'mousedown',
+	'mouseup',
+	'dblclick',
+	'type',
+	'key',
+	'scroll',
+	'paste',
+	'copy',
+	'back',
+	'forward',
+	'reload',
+	'setFps',
+	'getFps',
+	'warmup',
+]);
 
 // --- Browser State (module-level singleton — one browser at a time) ---
 
@@ -172,56 +195,32 @@ export async function autoStartHeadlessBrowser(profile?: string): Promise<void> 
 
 // --- Traffic Capture Buffer ---
 
-interface TrafficEntry {
-	id: number;
-	timestamp: number;
-	method: string;
-	url: string;
-	requestHeaders: Record<string, string>;
-	requestBody: unknown;
-	status: number;
-	responseHeaders: Record<string, string>;
-	responseBody: unknown;
-	durationMs: number;
-}
-
-const MAX_TRAFFIC_ENTRIES = 200;
-const MAX_BODY_SIZE = 50_000;
+const TRAFFIC_OPTIONS = trafficOptionsFromEnv();
+const MAX_TRAFFIC_ENTRIES = positiveInt(process.env.INTERCEPTOR_TRAFFIC_MAX_ENTRIES, 200);
+const TRAFFIC_TTL_MS = positiveInt(process.env.INTERCEPTOR_TRAFFIC_TTL_MS, 15 * 60_000);
 
 let trafficBuffer: TrafficEntry[] = [];
 let trafficIdCounter = 0;
 
-function addTrafficEntry(req: InterceptedRequest, res: InterceptedResponse): void {
-	let responseBody = res.body;
-	try {
-		const bodyStr = JSON.stringify(responseBody);
-		if (bodyStr.length > MAX_BODY_SIZE) {
-			responseBody = {
-				_truncated: true,
-				_size: bodyStr.length,
-				_preview: bodyStr.slice(0, 2000),
-			};
-		}
-	} catch {
-		/* not serializable */
-	}
+function positiveInt(value: string | undefined, fallback: number): number {
+	if (!value) return fallback;
+	const parsed = Number.parseInt(value, 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
-	trafficBuffer.push({
-		id: ++trafficIdCounter,
-		timestamp: req.timestamp,
-		method: req.method,
-		url: req.url,
-		requestHeaders: req.headers,
-		requestBody: req.body,
-		status: res.status,
-		responseHeaders: res.headers,
-		responseBody,
-		durationMs: res.timestamp - req.timestamp,
-	});
+function pruneTrafficBuffer(now = Date.now()): void {
+	if (TRAFFIC_TTL_MS > 0) {
+		trafficBuffer = trafficBuffer.filter((entry) => now - entry.timestamp <= TRAFFIC_TTL_MS);
+	}
 
 	if (trafficBuffer.length > MAX_TRAFFIC_ENTRIES) {
-		trafficBuffer.shift();
+		trafficBuffer = trafficBuffer.slice(-MAX_TRAFFIC_ENTRIES);
 	}
+}
+
+function addTrafficEntry(req: InterceptedRequest, res: InterceptedResponse): void {
+	trafficBuffer.push(createTrafficEntry(++trafficIdCounter, req, res, TRAFFIC_OPTIONS));
+	pruneTrafficBuffer();
 }
 
 // --- Traffic Buffer Accessors (used by REST endpoints in index.ts) ---
@@ -232,12 +231,13 @@ export function getTrafficEntries(sinceId?: number): {
 	oldestId: number;
 	newestId: number;
 } {
+	pruneTrafficBuffer();
 	let entries = trafficBuffer;
 	if (sinceId !== undefined && !Number.isNaN(sinceId)) {
 		entries = entries.filter((e) => e.id > sinceId);
 	}
 	return {
-		entries,
+		entries: entries.map((entry) => ({ ...entry })),
 		total: trafficBuffer.length,
 		oldestId: trafficBuffer[0]?.id ?? 0,
 		newestId: trafficBuffer[trafficBuffer.length - 1]?.id ?? 0,
@@ -249,6 +249,7 @@ export function getTrafficSummary(): {
 	uniqueEndpoints: number;
 	endpoints: Array<{ pattern: string; count: number; methods: string[]; statuses: number[] }>;
 } {
+	pruneTrafficBuffer();
 	const urlPatterns = new Map<
 		string,
 		{ count: number; methods: Set<string>; statuses: Set<number> }
@@ -323,6 +324,98 @@ function wsSend(ws: WebSocket, data: string | Buffer | Uint8Array): void {
 
 function wsSendJson(ws: WebSocket, obj: unknown): void {
 	wsSend(ws, JSON.stringify(obj));
+}
+
+function createWsRateLimiter() {
+	let windowStartedAt = Date.now();
+	let count = 0;
+
+	return () => {
+		const now = Date.now();
+		if (now - windowStartedAt >= 60_000) {
+			windowStartedAt = now;
+			count = 0;
+		}
+		count += 1;
+		return count <= WS_MESSAGES_PER_MINUTE;
+	};
+}
+
+function isFiniteNumber(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value);
+}
+
+function validateCoordinateMessage(message: Record<string, unknown>): string | null {
+	if (!isFiniteNumber(message.x) || !isFiniteNumber(message.y)) return 'x and y must be numbers';
+	return null;
+}
+
+function validateText(value: unknown, field: string): string | null {
+	if (typeof value !== 'string') return `${field} must be a string`;
+	if (value.length > MAX_WS_TEXT_LENGTH) return `${field} exceeds ${MAX_WS_TEXT_LENGTH} characters`;
+	return null;
+}
+
+function validateBrowserWsMessage(message: Record<string, unknown>): string | null {
+	if (typeof message.type !== 'string' || !BROWSER_WS_MESSAGE_TYPES.has(message.type)) {
+		return 'unsupported message type';
+	}
+
+	switch (message.type) {
+		case 'navigate':
+			if (typeof message.url !== 'string') return 'url must be a string';
+			try {
+				const url = new URL(message.url);
+				if (!['http:', 'https:', 'about:'].includes(url.protocol)) {
+					return 'url protocol must be http, https, or about';
+				}
+			} catch {
+				return 'url must be valid';
+			}
+			return null;
+		case 'mousemove':
+		case 'click':
+		case 'mousedown':
+		case 'mouseup':
+		case 'dblclick':
+			return validateCoordinateMessage(message);
+		case 'scroll':
+			return (
+				validateCoordinateMessage(message) ??
+				(isFiniteNumber(message.deltaX) || message.deltaX === undefined
+					? null
+					: 'deltaX must be a number') ??
+				(isFiniteNumber(message.deltaY) || message.deltaY === undefined
+					? null
+					: 'deltaY must be a number')
+			);
+		case 'type':
+		case 'paste':
+			return validateText(message.text, 'text');
+		case 'key':
+			return validateText(message.key, 'key');
+		case 'setFps':
+			if (!isFiniteNumber(message.fps) || message.fps < 1 || message.fps > 30) {
+				return 'fps must be between 1 and 30';
+			}
+			return null;
+		case 'warmup':
+			if (
+				message.sites !== undefined &&
+				(!isFiniteNumber(message.sites) || message.sites < 1 || message.sites > 10)
+			) {
+				return 'sites must be between 1 and 10';
+			}
+			if (
+				message.delay !== undefined &&
+				(!isFiniteNumber(message.delay) || message.delay < 0 || message.delay > 10_000)
+			) {
+				return 'delay must be between 0 and 10000';
+			}
+			return null;
+		default:
+			return null;
+	}
 }
 
 // --- WebSocket Message Dispatch ---
@@ -426,10 +519,23 @@ async function handleWsMessage(message: Record<string, unknown>, ws: WebSocket):
  * Wire the standard WS message handler to parse JSON and dispatch.
  */
 function wireWsMessageHandler(ws: WebSocket): void {
+	const allowMessage = createWsRateLimiter();
+
 	ws.on('message', async (data: Buffer) => {
 		try {
+			if (!allowMessage()) {
+				wsSendJson(ws, { type: 'error', message: 'Rate limit exceeded' });
+				ws.close(1008, 'Rate limit exceeded');
+				return;
+			}
 			const str = data.toString();
 			const message = JSON.parse(str) as Record<string, unknown>;
+			const validationError = validateBrowserWsMessage(message);
+			if (validationError) {
+				wsSendJson(ws, { type: 'error', message: validationError });
+				ws.close(1008, 'Invalid message');
+				return;
+			}
 			if (message.type !== 'mousemove') {
 				console.log(
 					'[BrowserWS] msg:',

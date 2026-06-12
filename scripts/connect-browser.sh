@@ -57,21 +57,17 @@ if [[ -z "$URL" ]]; then
   exit 1
 fi
 
-# Resolve the ws module path — pnpm hoists it under apps/api/node_modules
-WS_MODULE="$PROJECT_DIR/apps/api/node_modules/ws"
+# Resolve the ws module path from Bun's workspace install.
+WS_MODULE="$PROJECT_DIR/node_modules/ws"
 if [[ ! -d "$WS_MODULE" ]]; then
-  # Fallback: try the pnpm store
-  WS_MODULE=$(find "$PROJECT_DIR/node_modules/.pnpm" -path "*/ws@*/node_modules/ws" -maxdepth 4 -type d 2>/dev/null | head -1)
-  if [[ -z "$WS_MODULE" ]]; then
-    echo "Error: 'ws' module not found. Run 'pnpm install' first."
-    exit 1
-  fi
+  echo "Error: 'ws' module not found. Run 'bun install' first."
+  exit 1
 fi
 
 # Check if API server is running
 if ! lsof -iTCP:"$PORT" -sTCP:LISTEN -P >/dev/null 2>&1; then
   echo "Error: Nothing listening on port $PORT. Start the API server first:"
-  echo "  pnpm --filter @interceptor/api dev"
+  echo "  bun run --filter @interceptor/api dev"
   exit 1
 fi
 
@@ -91,12 +87,12 @@ fi
 
 if [[ "$FOREGROUND" == "true" ]]; then
   # Run in foreground — useful for debugging
-  NODE_PATH="$WS_MODULE/.." exec node "$CONNECT_SCRIPT" "$PORT" "$PROFILE" "$URL" "$TIMEOUT"
+  exec bun "$CONNECT_SCRIPT" "$PORT" "$PROFILE" "$URL" "$TIMEOUT"
 else
   # Run in background, wait for BROWSER_READY signal
   OUTFILE=$(mktemp /tmp/connect-browser-out.XXXXXX)
 
-  NODE_PATH="$WS_MODULE/.." node "$CONNECT_SCRIPT" "$PORT" "$PROFILE" "$URL" "$TIMEOUT" > "$OUTFILE" 2>&1 &
+  bun "$CONNECT_SCRIPT" "$PORT" "$PROFILE" "$URL" "$TIMEOUT" > "$OUTFILE" 2>&1 &
   BG_PID=$!
   echo "$BG_PID" > "$PIDFILE"
 

@@ -2,34 +2,89 @@
 	"name": "@interceptor/browser",
 	"version": "0.0.1",
 	"type": "module",
-	"main": "./src/index.ts",
+	"main": "./dist/index.js",
 	"types": "./src/index.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./remote": "./src/remote/index.ts",
-		"./remote/profiles": "./src/remote/profiles.ts",
-		"./shared": "./src/shared/index.ts",
-		"./shared/config": "./src/shared/config.ts",
-		"./shared/types": "./src/shared/types.ts",
-		"./shared/auth": "./src/shared/auth.ts",
-		"./shared/interceptor": "./src/shared/interceptor.ts",
-		"./shared/session-manager": "./src/shared/session-manager.ts",
-		"./handler": "./src/handler/index.ts",
-		"./handler/api-proxy": "./src/handler/api-proxy.ts",
-		"./handler/domain-loader": "./src/handler/domain-loader.ts",
-		"./analysis": "./src/analysis/discovery-analyzer.ts",
-		"./analysis/discovery": "./src/analysis/discovery-analyzer.ts",
-		"./analysis/dom": "./src/analysis/dom-orchestrator.ts",
-		"./codegen": "./src/codegen/index.ts",
-		"./registry": "./src/registry.ts",
-		"./mcp": "./src/mcp/server.ts",
-		"./analysis/discovery": "./src/analysis/discovery-analyzer.ts"
+		".": {
+			"types": "./src/index.ts",
+			"default": "./dist/index.js"
+		},
+		"./remote": {
+			"types": "./src/remote/index.ts",
+			"default": "./dist/remote/index.js"
+		},
+		"./remote/profiles": {
+			"types": "./src/remote/profiles.ts",
+			"default": "./dist/remote/profiles.js"
+		},
+		"./shared": {
+			"types": "./src/shared/index.ts",
+			"default": "./dist/shared/index.js"
+		},
+		"./shared/config": {
+			"types": "./src/shared/config.ts",
+			"default": "./dist/shared/config.js"
+		},
+		"./shared/types": {
+			"types": "./src/shared/types.ts",
+			"default": "./dist/shared/types.js"
+		},
+		"./shared/auth": {
+			"types": "./src/shared/auth.ts",
+			"default": "./dist/shared/auth.js"
+		},
+		"./shared/interceptor": {
+			"types": "./src/shared/interceptor.ts",
+			"default": "./dist/shared/interceptor.js"
+		},
+		"./shared/session-manager": {
+			"types": "./src/shared/session-manager.ts",
+			"default": "./dist/shared/session-manager.js"
+		},
+		"./handler": {
+			"types": "./src/handler/index.ts",
+			"default": "./dist/handler/index.js"
+		},
+		"./handler/api-proxy": {
+			"types": "./src/handler/api-proxy.ts",
+			"default": "./dist/handler/api-proxy.js"
+		},
+		"./handler/domain-loader": {
+			"types": "./src/handler/domain-loader.ts",
+			"default": "./dist/handler/domain-loader.js"
+		},
+		"./analysis": {
+			"types": "./src/analysis/discovery-analyzer.ts",
+			"default": "./dist/analysis/discovery-analyzer.js"
+		},
+		"./analysis/discovery": {
+			"types": "./src/analysis/discovery-analyzer.ts",
+			"default": "./dist/analysis/discovery-analyzer.js"
+		},
+		"./analysis/dom": {
+			"types": "./src/analysis/dom-orchestrator.ts",
+			"default": "./dist/analysis/dom-orchestrator.js"
+		},
+		"./codegen": {
+			"types": "./src/codegen/index.ts",
+			"default": "./dist/codegen/index.js"
+		},
+		"./registry": {
+			"types": "./src/registry.ts",
+			"default": "./dist/registry.js"
+		},
+		"./mcp": {
+			"types": "./src/mcp/server.ts",
+			"default": "./dist/mcp/server.js"
+		}
 	},
 	"scripts": {
+		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit",
-		"postinstall": "npx patchright install chromium"
+		"codegen": "tsx src/codegen/cli.ts",
+		"browser:install": "patchright install chromium"
 	},
 	"dependencies": {
 		"@ghostery/adblocker-playwright": "2.14.1",

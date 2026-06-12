@@ -5,7 +5,7 @@
  * (binary JPEG frames, JSON control messages) and keeps the connection alive
  * in the background so traffic capture works via GET /browser/traffic.
  *
- * Usage: node scripts/connect-browser.cjs <port> <profile> <url> [timeout_seconds]
+ * Usage: bun scripts/connect-browser.cjs <port> <profile> <url> [timeout_seconds]
  *
  * Exits with code 0 once browser is ready, keeping the process alive.
  * Exits with code 1 on error or timeout.
@@ -17,8 +17,10 @@ const port = process.argv[2] || '3001';
 const profile = process.argv[3] || 'generic';
 const url = process.argv[4] || '';
 const timeoutSec = parseInt(process.argv[5] || '60', 10);
+const token = process.env.INTERCEPTOR_CONTROL_TOKEN || '';
+const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
 
-const wsUrl = `ws://localhost:${port}/browser/stream?profile=${encodeURIComponent(profile)}${url ? `&url=${encodeURIComponent(url)}` : ''}`;
+const wsUrl = `ws://localhost:${port}/browser/stream?profile=${encodeURIComponent(profile)}${url ? `&url=${encodeURIComponent(url)}` : ''}${tokenParam}`;
 
 let ready = false;
 let ws;
@@ -89,7 +91,7 @@ ws.on('message', (data, isBinary) => {
 ws.on('error', (err) => {
 	if (err.code === 'ECONNREFUSED') {
 		log(`ERROR: Connection refused on port ${port}. Is the API server running?`);
-		log(`  Start it with: pnpm --filter @interceptor/api dev`);
+		log(`  Start it with: bun run --filter @interceptor/api dev`);
 	} else {
 		log(`ERROR: WebSocket error: ${err.message}`);
 	}

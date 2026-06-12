@@ -210,7 +210,7 @@ export function generateClientFile(config: ClientGenerationConfig): string {
  * Total Endpoints: ${config.endpoints.length}
  * Endpoints with Schema: ${config.endpoints.filter((ep) => ep.canInferSchema).length}
  *
- * To regenerate: pnpm codegen ${config.domainName}
+ * To regenerate: bun run --filter @interceptor/browser codegen ${config.domainName}
  */
 
 /**

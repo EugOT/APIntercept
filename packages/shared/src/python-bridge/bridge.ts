@@ -29,10 +29,17 @@ import {
 	type PythonBridgeConfig,
 } from './types';
 
+function nonEmpty(value: string | undefined): string | undefined {
+	return value && value.trim().length > 0 ? value : undefined;
+}
+
+const configuredPython =
+	nonEmpty(process.env.INTERCEPTOR_PYTHON) ?? nonEmpty(process.env.PIXI_PYTHON);
 const DEFAULTS = {
-	pythonPath: 'python3',
+	pythonPath: configuredPython ?? 'pixi',
+	pythonArgs: configuredPython ? [] : ['run', 'python'],
 	timeoutMs: 5_000,
-	startupTimeoutMs: 5_000,
+	startupTimeoutMs: configuredPython ? 5_000 : 10_000,
 } as const;
 
 export class PythonBridge {
@@ -40,10 +47,10 @@ export class PythonBridge {
 	private readline: Interface | null = null;
 	private availableMethods: string[] = [];
 
-	private readonly config: Required<
-		Pick<PythonBridgeConfig, 'pythonPath' | 'timeoutMs' | 'startupTimeoutMs'>
-	> &
-		PythonBridgeConfig;
+	private readonly config: Omit<PythonBridgeConfig, 'pythonArgs'> &
+		Required<Pick<PythonBridgeConfig, 'pythonPath' | 'timeoutMs' | 'startupTimeoutMs'>> & {
+			pythonArgs: string[];
+		};
 
 	/** Pending requests awaiting responses, keyed by request ID */
 	private readonly pending = new Map<
@@ -57,6 +64,7 @@ export class PythonBridge {
 	constructor(config: PythonBridgeConfig) {
 		this.config = {
 			pythonPath: config.pythonPath ?? DEFAULTS.pythonPath,
+			pythonArgs: config.pythonArgs ?? DEFAULTS.pythonArgs,
 			timeoutMs: config.timeoutMs ?? DEFAULTS.timeoutMs,
 			startupTimeoutMs: config.startupTimeoutMs ?? DEFAULTS.startupTimeoutMs,
 			...config,
@@ -87,7 +95,7 @@ export class PythonBridge {
 				PYTHONUNBUFFERED: '1',
 				PYTHONPATH: pythonPath,
 			};
-			this.process = spawn(this.config.pythonPath, ['-u', workerPath], {
+			this.process = spawn(this.config.pythonPath, [...this.config.pythonArgs, '-u', workerPath], {
 				cwd: pythonPath,
 				env,
 				stdio: ['pipe', 'pipe', 'pipe'],

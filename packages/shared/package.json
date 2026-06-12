@@ -2,12 +2,21 @@
 	"name": "@interceptor/shared",
 	"version": "0.0.1",
 	"type": "module",
-	"main": "./src/index.ts",
+	"main": "./dist/index.js",
 	"types": "./src/index.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./types": "./src/types.ts",
-		"./python-bridge": "./src/python-bridge/index.ts"
+		".": {
+			"types": "./src/index.ts",
+			"default": "./dist/index.js"
+		},
+		"./types": {
+			"types": "./src/types.ts",
+			"default": "./dist/types.js"
+		},
+		"./python-bridge": {
+			"types": "./src/python-bridge/index.ts",
+			"default": "./dist/python-bridge/index.js"
+		}
 	},
 	"scripts": {
 		"build": "tsc",

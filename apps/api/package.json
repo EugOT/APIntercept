@@ -3,7 +3,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"build": "tsc",
+		"build": "bun build src/index.ts --target=node --format=esm --packages=external --outdir=dist --sourcemap=external",
 		"dev": "tsx --watch --watch-path=src src/index.ts",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"

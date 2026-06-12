@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-node -e "
+bun -e "
 const { chromium } = require('patchright');
 (async () => {
   const b = await chromium.launch({ headless: true });

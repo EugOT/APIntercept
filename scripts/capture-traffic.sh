@@ -15,7 +15,7 @@
 #   ./scripts/capture-traffic.sh --summary                # Show endpoint summary only
 #   ./scripts/capture-traffic.sh --clear                  # Clear traffic buffer
 #
-# Requires: curl, node (for JSON formatting)
+# Requires: curl, bun (for JSON formatting)
 
 set -euo pipefail
 
@@ -49,24 +49,28 @@ while [[ $# -gt 0 ]]; do
 done
 
 BASE_URL="http://localhost:${PORT}"
+AUTH_ARGS=()
+if [[ -n "${INTERCEPTOR_CONTROL_TOKEN:-}" ]]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${INTERCEPTOR_CONTROL_TOKEN}")
+fi
 
 # Check if API server is running
 if ! curl -sf "${BASE_URL}/health" > /dev/null 2>&1; then
   echo "Error: API server not responding on port $PORT"
-  echo "  Start it with: pnpm --filter @interceptor/api dev"
+  echo "  Start it with: bun run --filter @interceptor/api dev"
   exit 1
 fi
 
 # Clear mode
 if [[ "$CLEAR" == "true" ]]; then
-  RESULT=$(curl -sf -X DELETE "${BASE_URL}/browser/traffic")
+  RESULT=$(curl -sf "${AUTH_ARGS[@]}" -X DELETE "${BASE_URL}/browser/traffic")
   echo "Traffic buffer cleared: $RESULT"
   exit 0
 fi
 
 # Summary mode
 if [[ "$SUMMARY" == "true" ]]; then
-  curl -sf "${BASE_URL}/browser/traffic/summary" | node -e "
+  curl -sf "${AUTH_ARGS[@]}" "${BASE_URL}/browser/traffic/summary" | bun -e "
     const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
     console.log('Traffic Summary');
     console.log('===============');
@@ -100,7 +104,7 @@ fetch_traffic() {
   fi
 
   local response
-  response=$(curl -sf "$url")
+  response=$(curl -sf "${AUTH_ARGS[@]}" "$url")
 
   if [[ -z "$response" ]]; then
     echo "No response from traffic endpoint"
@@ -108,7 +112,7 @@ fetch_traffic() {
   fi
 
   local entry_count
-  entry_count=$(echo "$response" | node -e "
+  entry_count=$(echo "$response" | bun -e "
     const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
     console.log(data.entries ? data.entries.length : 0);
   ")
@@ -123,7 +127,7 @@ fetch_traffic() {
 
   if [[ -n "$SAVE_DIR" ]]; then
     mkdir -p "$SAVE_DIR"
-    echo "$response" | node -e "
+    echo "$response" | bun -e "
       const fs = require('fs');
       const path = require('path');
       const data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));
@@ -158,7 +162,7 @@ fetch_traffic() {
   fi
 
   if [[ "$FULL" == "true" ]]; then
-    echo "$response" | node -e "
+    echo "$response" | bun -e "
       const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
       console.log('Traffic Entries (' + data.total + ' total, showing ' + data.entries.length + ')');
       console.log('='.repeat(80));
@@ -178,7 +182,7 @@ fetch_traffic() {
       }
     "
   else
-    echo "$response" | node -e "
+    echo "$response" | bun -e "
       const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
       console.log('Traffic: ' + data.total + ' entries (oldest: #' + data.oldestId + ', newest: #' + data.newestId + ')');
       console.log('');
@@ -206,7 +210,7 @@ fetch_traffic() {
 
   # Update SINCE for watch mode to avoid re-printing
   if [[ "$WATCH" == "true" ]]; then
-    SINCE=$(echo "$response" | node -e "
+    SINCE=$(echo "$response" | bun -e "
       const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
       console.log(data.newestId);
     ")

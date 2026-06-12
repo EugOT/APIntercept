@@ -2,11 +2,17 @@
 	"name": "@interceptor/test-server",
 	"version": "0.0.1",
 	"type": "module",
-	"main": "./src/index.ts",
+	"main": "./dist/index.js",
 	"types": "./src/index.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./data": "./src/data/index.ts"
+		".": {
+			"types": "./src/index.ts",
+			"default": "./dist/index.js"
+		},
+		"./data": {
+			"types": "./src/data/index.ts",
+			"default": "./dist/data/index.js"
+		}
 	},
 	"scripts": {
 		"build": "tsc",

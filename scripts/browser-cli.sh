@@ -56,40 +56,50 @@ for arg in "$@"; do
   prev="$arg"
 done
 API="http://localhost:${PORT}/browser/mcp"
+AUTH_ARGS=()
+if [[ -n "${INTERCEPTOR_CONTROL_TOKEN:-}" ]]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${INTERCEPTOR_CONTROL_TOKEN}")
+fi
 
 CMD="${ARGS[0]:-help}"
 
 # --- Helper functions ---
 
 api_get() {
-  curl -sf "$API$1" 2>/dev/null
+  curl -sf "${AUTH_ARGS[@]}" "$API$1" 2>/dev/null
 }
 
 api_post() {
-  curl -sf "$API$1" -X POST -H "Content-Type: application/json" -d "$2" 2>/dev/null
+  curl -sf "${AUTH_ARGS[@]}" "$API$1" -X POST -H "Content-Type: application/json" -d "$2" 2>/dev/null
+}
+
+json_string() {
+  printf "%s" "$1" | bun -e 'process.stdout.write(JSON.stringify(await Bun.stdin.text()))'
 }
 
 # Accessibility snapshot — structured list of interactive elements
 # Uses page.evaluate to build a minimal tree
 get_snapshot() {
   api_post "/evaluate" '{"script":"(()=>{const els=[];document.querySelectorAll(\"a[href],button,input,select,textarea,[role=button],[data-action],[onclick]\").forEach((el,i)=>{if(!el.offsetParent&&el.tagName!==\"INPUT\")return;const tag=el.tagName.toLowerCase();const text=(el.textContent||\"\").trim().slice(0,80);const type=el.getAttribute(\"type\")||\"\";const name=el.getAttribute(\"name\")||el.getAttribute(\"id\")||\"\";const href=el.getAttribute(\"href\")||\"\";const role=el.getAttribute(\"role\")||\"\";const action=el.getAttribute(\"data-action\")||\"\";els.push({ref:\"e\"+i,tag,text,type,name,href:href.slice(0,100),role,action})});return els})()"}' \
-    | python3 -c "
-import sys,json
-try:
-  d=json.load(sys.stdin)
-  els=d.get('result',[])
-  for e in els:
-    parts=[e['ref'],e['tag']]
-    if e.get('text'): parts.append('\"'+e['text'][:60]+'\"')
-    if e.get('type'): parts.append('type='+e['type'])
-    if e.get('name'): parts.append('name='+e['name'])
-    if e.get('href'): parts.append('→'+e['href'][:60])
-    if e.get('role'): parts.append('role='+e['role'])
-    if e.get('action'): parts.append('action='+e['action'])
-    print(' '.join(parts))
-  print(f'--- {len(els)} interactive elements ---')
-except: print('Error parsing snapshot')
-" 2>/dev/null
+    | bun -e '
+try {
+  const d = JSON.parse(await Bun.stdin.text());
+  const els = d.result ?? [];
+  for (const e of els) {
+    const parts = [e.ref, e.tag];
+    if (e.text) parts.push(`"${String(e.text).slice(0, 60)}"`);
+    if (e.type) parts.push(`type=${e.type}`);
+    if (e.name) parts.push(`name=${e.name}`);
+    if (e.href) parts.push(`->${String(e.href).slice(0, 60)}`);
+    if (e.role) parts.push(`role=${e.role}`);
+    if (e.action) parts.push(`action=${e.action}`);
+    console.log(parts.join(" "));
+  }
+  console.log(`--- ${els.length} interactive elements ---`);
+} catch {
+  console.log("Error parsing snapshot");
+}
+' 2>/dev/null
 }
 
 # Traffic summary — compact one-line-per-entry format
@@ -98,58 +108,62 @@ get_traffic() {
   if [[ "${1:-}" != "" ]]; then
     endpoint="/traffic?since=$1"
   fi
-  api_get "$endpoint" | python3 -c "
-import sys,json
-try:
-  d=json.load(sys.stdin)
-  entries=d.get('entries',[])
-  for e in entries:
-    url=e.get('url','')[:120]
-    method=e.get('method','?')
-    status=e.get('status','?')
-    ct=e.get('responseHeaders',{}).get('content-type','')[:30]
-    size=e.get('responseSize',0)
-    # Skip tracking/analytics
-    skip=['google-analytics','doubleclick','facebook','snapchat','onetrust','cookielaw','sentry','forter','riskified']
-    if any(s in url.lower() for s in skip): continue
-    sz=f'{size}B' if size<1024 else f'{size//1024}KB'
-    print(f'{method:4} {status:3} {sz:>6} {ct:30} {url}')
-  print(f'--- {len(entries)} entries ---')
-except: print('Error parsing traffic')
-" 2>/dev/null
+  api_get "$endpoint" | bun -e '
+try {
+  const d = JSON.parse(await Bun.stdin.text());
+  const entries = d.entries ?? [];
+  const skip = ["google-analytics", "doubleclick", "facebook", "snapchat", "onetrust", "cookielaw", "sentry", "forter", "riskified"];
+  for (const e of entries) {
+    const url = String(e.url ?? "").slice(0, 120);
+    if (skip.some((item) => url.toLowerCase().includes(item))) continue;
+    const method = String(e.method ?? "?").padEnd(4);
+    const status = String(e.status ?? "?").padStart(3);
+    const ct = String(e.responseHeaders?.["content-type"] ?? "").slice(0, 30).padEnd(30);
+    const size = Number(e.responseSize ?? 0);
+    const sz = (size < 1024 ? `${size}B` : `${Math.floor(size / 1024)}KB`).padStart(6);
+    console.log(`${method} ${status} ${sz} ${ct} ${url}`);
+  }
+  console.log(`--- ${entries.length} entries ---`);
+} catch {
+  console.log("Error parsing traffic");
+}
+' 2>/dev/null
 }
 
 # Click by text content or CSS selector
 click_element() {
   local selector="$1"
+  local selector_json
+  selector_json="$(json_string "$selector")"
   # Try clicking by evaluating in the page — find by text first, then CSS
-  api_post "/evaluate" "{\"script\":\"(()=>{const s='${selector//\'/\\\'}';let el=null;document.querySelectorAll('button,a,[role=button],[data-action]').forEach(e=>{if(e.textContent&&e.textContent.trim().includes(s)&&e.offsetParent)el=el||e});if(!el)el=document.querySelector(s);if(!el)return{error:'Element not found: '+s};el.scrollIntoView({block:'center'});el.click();return{clicked:true,tag:el.tagName,text:(el.textContent||'').trim().slice(0,60)}})()\"}" \
-    | python3 -c "
-import sys,json
-try:
-  d=json.load(sys.stdin).get('result',{})
-  if 'error' in d: print('ERROR:',d['error'])
-  else: print(f'Clicked {d.get(\"tag\",\"?\")}:',d.get('text','')[:60])
-except Exception as e: print(f'Error: {e}')
-" 2>/dev/null
+  api_post "/evaluate" "{\"script\":\"(()=>{const s=${selector_json};let el=null;document.querySelectorAll('button,a,[role=button],[data-action]').forEach(e=>{if(e.textContent&&e.textContent.trim().includes(s)&&e.offsetParent)el=el||e});if(!el)el=document.querySelector(s);if(!el)return{error:'Element not found: '+s};el.scrollIntoView({block:'center'});el.click();return{clicked:true,tag:el.tagName,text:(el.textContent||'').trim().slice(0,60)}})()\"}" \
+    | bun -e '
+try {
+  const d = JSON.parse(await Bun.stdin.text()).result ?? {};
+  if (d.error) console.log("ERROR:", d.error);
+  else console.log(`Clicked ${d.tag ?? "?"}:`, String(d.text ?? "").slice(0, 60));
+} catch (error) {
+  console.log(`Error: ${error.message}`);
+}
+' 2>/dev/null
 }
 
 # --- Commands ---
 
 case "$CMD" in
   status)
-    api_get "/status" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-if d.get('connected'): print(f'Connected: {d.get(\"url\",\"?\")}')
-else: print('Not connected')
-" 2>/dev/null
+    api_get "/status" | bun -e '
+const d = JSON.parse(await Bun.stdin.text());
+if (d.connected) console.log(`Connected: ${d.url ?? "?"}`);
+else console.log("Not connected");
+' 2>/dev/null
     ;;
 
   navigate)
     url="${ARGS[1]:-}"
     [[ -z "$url" ]] && echo "Usage: browser-cli.sh navigate <url>" && exit 1
-    api_post "/navigate" "{\"url\":\"$url\"}" | python3 -c "import sys,json; print('Navigated to:',json.load(sys.stdin).get('url','?'))" 2>/dev/null
+    url_json="$(json_string "$url")"
+    api_post "/navigate" "{\"url\":${url_json}}" | bun -e 'const d = JSON.parse(await Bun.stdin.text()); console.log("Navigated to:", d.url ?? "?")' 2>/dev/null
     sleep 3
     echo ""
     get_snapshot
@@ -161,13 +175,12 @@ else: print('Not connected')
 
   screenshot)
     path="${ARGS[1]:-/tmp/screenshot.jpg}"
-    api_post "/screenshot" '{"quality":60}' | python3 -c "
-import sys,json,base64
-d=json.load(sys.stdin)
-img=base64.b64decode(d['data'])
-with open('$path','wb') as f: f.write(img)
-print(f'Screenshot saved: $path ({len(img)//1024}KB)')
-" 2>/dev/null
+    api_post "/screenshot" '{"quality":60}' | SCREENSHOT_PATH="$path" bun -e '
+const d = JSON.parse(await Bun.stdin.text());
+const img = Buffer.from(d.data, "base64");
+await Bun.write(process.env.SCREENSHOT_PATH, img);
+console.log(`Screenshot saved: ${process.env.SCREENSHOT_PATH} (${Math.floor(img.length / 1024)}KB)`);
+' 2>/dev/null
     ;;
 
   click)
@@ -193,7 +206,8 @@ print(f'Screenshot saved: $path ({len(img)//1024}KB)')
   type)
     text="${ARGS[1]:-}"
     [[ -z "$text" ]] && echo "Usage: browser-cli.sh type <text>" && exit 1
-    api_post "/type" "{\"text\":\"$text\"}" >/dev/null
+    text_json="$(json_string "$text")"
+    api_post "/type" "{\"text\":${text_json}}" >/dev/null
     echo "Typed: $text"
     ;;
 
@@ -216,8 +230,12 @@ print(f'Screenshot saved: $path ({len(img)//1024}KB)')
   eval)
     script="${ARGS[1]:-}"
     [[ -z "$script" ]] && echo "Usage: browser-cli.sh eval <js>" && exit 1
-    api_post "/evaluate" "{\"script\":$(python3 -c "import json; print(json.dumps('$script'))")}" \
-      | python3 -c "import sys,json; r=json.load(sys.stdin).get('result'); print(json.dumps(r,indent=2) if isinstance(r,(dict,list)) else str(r))" 2>/dev/null
+    script_json="$(json_string "$script")"
+    api_post "/evaluate" "{\"script\":${script_json}}" \
+      | bun -e '
+const r = JSON.parse(await Bun.stdin.text()).result;
+console.log(typeof r === "object" ? JSON.stringify(r, null, 2) : String(r));
+' 2>/dev/null
     ;;
 
   # --- Compound commands ---
