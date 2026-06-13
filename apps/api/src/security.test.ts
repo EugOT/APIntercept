@@ -1,3 +1,4 @@
+import type { IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { describe, expect, test } from 'vitest';
 import {
@@ -5,6 +6,7 @@ import {
 	createSecurityConfig,
 	isAllowedOrigin,
 	isAuthorizedRequest,
+	isAuthorizedUpgrade,
 	PayloadTooLargeError,
 	readRequestBody,
 } from './security';
@@ -45,6 +47,21 @@ describe('security config', () => {
 			),
 		).toBe(true);
 		expect(isAuthorizedRequest(new Request('http://localhost/api'), config)).toBe(false);
+		expect(
+			isAuthorizedRequest(new Request('http://localhost/api?token=secret-token'), config),
+		).toBe(false);
+	});
+
+	test('keeps query tokens scoped to websocket upgrades', () => {
+		const config = createSecurityConfig({
+			NODE_ENV: 'production',
+			INTERCEPTOR_CONTROL_TOKEN: 'secret-token',
+		});
+		const request = { headers: {} } as IncomingMessage;
+
+		expect(
+			isAuthorizedUpgrade(request, new URL('http://localhost/ws?token=secret-token'), config),
+		).toBe(true);
 	});
 });
 

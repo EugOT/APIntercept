@@ -150,6 +150,7 @@ Iteration 44: Two-pass strategy doubles transport coverage (2.1 → 4.3 avg)
 - Production API startup requires `INTERCEPTOR_CONTROL_TOKEN`.
 - Production CORS is restricted to `INTERCEPTOR_ALLOWED_ORIGINS`.
 - Browser and dashboard WebSocket upgrades enforce Origin, token, payload, and rate limits.
+- Browser WebSockets use short-lived tickets minted over authenticated REST; protected dashboards can provide the control token through `sessionStorage.interceptorControlToken`.
 - Captured traffic redacts sensitive headers and secret-like body fields before buffering.
 - Request body capture is disabled by default with `INTERCEPTOR_CAPTURE_REQUEST_BODIES=false`.
 

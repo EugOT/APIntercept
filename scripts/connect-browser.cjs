@@ -18,9 +18,9 @@ const profile = process.argv[3] || 'generic';
 const url = process.argv[4] || '';
 const timeoutSec = parseInt(process.argv[5] || '60', 10);
 const token = process.env.INTERCEPTOR_CONTROL_TOKEN || '';
-const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
 
-const wsUrl = `ws://localhost:${port}/browser/stream?profile=${encodeURIComponent(profile)}${url ? `&url=${encodeURIComponent(url)}` : ''}${tokenParam}`;
+const wsUrl = `ws://localhost:${port}/browser/stream?profile=${encodeURIComponent(profile)}${url ? `&url=${encodeURIComponent(url)}` : ''}`;
+const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
 let ready = false;
 let ws;
@@ -40,7 +40,7 @@ const timer = setTimeout(() => {
 }, timeoutSec * 1000);
 
 try {
-	ws = new WebSocket(wsUrl);
+	ws = new WebSocket(wsUrl, headers ? { headers } : undefined);
 } catch (err) {
 	log(`ERROR: Failed to create WebSocket connection: ${err.message}`);
 	process.exit(1);

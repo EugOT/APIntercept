@@ -115,11 +115,8 @@ export function isAuthorizedToken(
 export function isAuthorizedRequest(request: Request, config: SecurityConfig): boolean {
 	if (config.authDisabled) return true;
 
-	const url = new URL(request.url);
 	const candidate =
-		bearerToken(request.headers.get('authorization')) ??
-		request.headers.get(CONTROL_TOKEN_HEADER) ??
-		url.searchParams.get('token');
+		bearerToken(request.headers.get('authorization')) ?? request.headers.get(CONTROL_TOKEN_HEADER);
 
 	return isAuthorizedToken(candidate, config);
 }
