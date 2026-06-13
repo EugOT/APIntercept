@@ -54,6 +54,7 @@ if [ -f "playwright.config.ts" ] && [ -d "tests/e2e" ]; then
   # Kill any stale server on port 3002
   lsof -ti:3002 | xargs kill 2>/dev/null || true
   sleep 1
+  bun run browser:install || fail "Browser install failed"
   PLAYWRIGHT_HTML_OPEN=never bun run e2e || fail "E2E tests failed"
   pass "E2E tests"
 else

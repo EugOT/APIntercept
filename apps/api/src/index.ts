@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { createServer } from 'node:http';
 import type { Socket } from 'node:net';
@@ -55,6 +56,8 @@ const config = validateConfig({
 	environment: process.env.NODE_ENV ?? 'development',
 });
 const securityConfig = createSecurityConfig();
+const WS_TICKET_TTL_MS = 60_000;
+const wsTickets = new Map<string, number>();
 
 async function requireControlPlaneAuth(c: Context, next: Next) {
 	if (isAuthorizedRequest(c.req.raw, securityConfig)) {
@@ -64,6 +67,35 @@ async function requireControlPlaneAuth(c: Context, next: Next) {
 
 	c.header('WWW-Authenticate', 'Bearer');
 	return c.json({ error: 'Unauthorized' }, 401);
+}
+
+function pruneExpiredWsTickets(now = Date.now()): void {
+	for (const [ticket, expiresAt] of wsTickets) {
+		if (expiresAt <= now) wsTickets.delete(ticket);
+	}
+}
+
+function createWsTicket(): { ticket: string; expiresAt: number } {
+	const now = Date.now();
+	pruneExpiredWsTickets(now);
+	const ticket = randomUUID();
+	const expiresAt = now + WS_TICKET_TTL_MS;
+	wsTickets.set(ticket, expiresAt);
+	return { ticket, expiresAt };
+}
+
+function consumeWsTicket(ticket: string | null): boolean {
+	if (!ticket) return false;
+	const expiresAt = wsTickets.get(ticket);
+	wsTickets.delete(ticket);
+	return expiresAt !== undefined && expiresAt > Date.now();
+}
+
+function isAuthorizedWebSocketUpgrade(request: IncomingMessage, requestUrl: URL): boolean {
+	return (
+		isAuthorizedUpgrade(request, requestUrl, securityConfig) ||
+		consumeWsTicket(requestUrl.searchParams.get('ticket'))
+	);
 }
 
 // Create Hono app for REST routes
@@ -106,6 +138,11 @@ app.use('/api', requireControlPlaneAuth);
 app.use('/api/*', requireControlPlaneAuth);
 
 // Browser endpoints — traffic capture for API discovery
+app.post('/browser/ws-ticket', (c) => {
+	const { ticket, expiresAt } = createWsTicket();
+	return c.json({ ticket, expiresAt: new Date(expiresAt).toISOString() });
+});
+
 app.get('/browser/health', (c) => c.json(getBrowserHealth()));
 
 app.get('/browser/traffic', (c) => {
@@ -299,7 +336,7 @@ server.on('upgrade', async (req: IncomingMessage, socket: Socket, head: Buffer) 
 			return;
 		}
 
-		if (!isAuthorizedUpgrade(req, requestUrl, securityConfig)) {
+		if (!isAuthorizedWebSocketUpgrade(req, requestUrl)) {
 			rejectUpgrade(socket, 401, 'Unauthorized');
 			return;
 		}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { withWebSocketTicket } from '@/lib/control-auth';
 
 interface Stats {
 	mean: number;
@@ -39,56 +40,69 @@ export default function MultiplierPanel() {
 	const computingRef = useRef(false);
 
 	useEffect(() => {
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-		wsRef.current = ws;
+		let ws: WebSocket | null = null;
+		let connectTimeout: ReturnType<typeof setTimeout> | null = null;
+		let cancelled = false;
 
-		// Timeout: if WS doesn't connect within 10s, show error state
-		const connectTimeout = setTimeout(() => {
-			if (ws.readyState !== WebSocket.OPEN) {
-				setError('Cannot connect to API server');
-				ws.close();
-			}
-		}, 10_000);
+		async function connect() {
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			const wsUrl = await withWebSocketTicket(`${protocol}//${window.location.host}/ws`);
+			if (cancelled) return;
 
-		ws.addEventListener('open', () => {
-			clearTimeout(connectTimeout);
-			setConnected(true);
-			setError(null);
-		});
-		ws.addEventListener('close', () => {
-			setConnected(false);
-		});
-		ws.addEventListener('error', () => {
-			clearTimeout(connectTimeout);
-			setConnected(false);
-			setError('Connection lost');
-		});
+			ws = new WebSocket(wsUrl);
+			wsRef.current = ws;
 
-		ws.addEventListener('message', (e: MessageEvent) => {
-			let msg: { type: string; data?: unknown; requestId?: string };
-			try {
-				msg = JSON.parse(e.data as string);
-			} catch {
-				return;
-			}
+			// Timeout: if WS doesn't connect within 10s, show error state
+			connectTimeout = setTimeout(() => {
+				if (ws?.readyState !== WebSocket.OPEN) {
+					setError('Cannot connect to API server');
+					ws?.close();
+				}
+			}, 10_000);
 
-			if (msg.type === 'state') {
-				const json = JSON.stringify(msg.data);
-				if (json === lastJsonRef.current) return;
-				lastJsonRef.current = json;
-				setState(msg.data as State);
-			} else if (msg.type === 'compute:result') {
-				const data = msg.data as Stats;
-				if (data.mean !== undefined) setStats(data);
-				computingRef.current = false;
-			} else if (msg.type === 'compute:error') {
-				computingRef.current = false;
-			}
-		});
+			ws.addEventListener('open', () => {
+				if (connectTimeout) clearTimeout(connectTimeout);
+				setConnected(true);
+				setError(null);
+			});
+			ws.addEventListener('close', () => {
+				setConnected(false);
+			});
+			ws.addEventListener('error', () => {
+				if (connectTimeout) clearTimeout(connectTimeout);
+				setConnected(false);
+				setError('Connection lost');
+			});
+
+			ws.addEventListener('message', (e: MessageEvent) => {
+				let msg: { type: string; data?: unknown; requestId?: string };
+				try {
+					msg = JSON.parse(e.data as string);
+				} catch {
+					return;
+				}
+
+				if (msg.type === 'state') {
+					const json = JSON.stringify(msg.data);
+					if (json === lastJsonRef.current) return;
+					lastJsonRef.current = json;
+					setState(msg.data as State);
+				} else if (msg.type === 'compute:result') {
+					const data = msg.data as Stats;
+					if (data.mean !== undefined) setStats(data);
+					computingRef.current = false;
+				} else if (msg.type === 'compute:error') {
+					computingRef.current = false;
+				}
+			});
+		}
+
+		void connect();
 
 		return () => {
-			ws.close();
+			cancelled = true;
+			if (connectTimeout) clearTimeout(connectTimeout);
+			ws?.close();
 			wsRef.current = null;
 			setConnected(false);
 		};

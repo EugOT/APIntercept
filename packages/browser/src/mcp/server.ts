@@ -45,9 +45,13 @@ function toolSchema(shape: ToolShape): AnySchema {
 /** Call a REST endpoint on the Interceptor API */
 async function apiCall(path: string, method = 'GET', body?: unknown) {
 	const url = `${API_BASE}/browser/mcp${path}`;
+	const token = process.env.INTERCEPTOR_CONTROL_TOKEN || process.env.API_AUTH_TOKEN || '';
+	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+	if (token) headers.Authorization = `Bearer ${token}`;
+
 	const options: RequestInit = {
 		method,
-		headers: { 'Content-Type': 'application/json' },
+		headers,
 	};
 	if (body !== undefined) {
 		options.body = JSON.stringify(body);

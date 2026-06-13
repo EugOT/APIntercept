@@ -133,10 +133,15 @@ try {
 # Click by text content or CSS selector
 click_element() {
   local selector="$1"
-  local selector_json
-  selector_json="$(json_string "$selector")"
+  local payload
+  payload="$(SELECTOR="$selector" bun -e '
+const selector = process.env.SELECTOR ?? "";
+const selectorLiteral = JSON.stringify(selector);
+const script = `(()=>{const s=${selectorLiteral};let el=null;document.querySelectorAll("button,a,[role=button],[data-action]").forEach((e)=>{if(e.textContent&&e.textContent.trim().includes(s)&&e.offsetParent)el=el||e});if(!el)el=document.querySelector(s);if(!el)return{error:"Element not found: "+s};el.scrollIntoView({block:"center"});el.click();return{clicked:true,tag:el.tagName,text:(el.textContent||"").trim().slice(0,60)}})()`;
+process.stdout.write(JSON.stringify({ script }));
+')"
   # Try clicking by evaluating in the page — find by text first, then CSS
-  api_post "/evaluate" "{\"script\":\"(()=>{const s=${selector_json};let el=null;document.querySelectorAll('button,a,[role=button],[data-action]').forEach(e=>{if(e.textContent&&e.textContent.trim().includes(s)&&e.offsetParent)el=el||e});if(!el)el=document.querySelector(s);if(!el)return{error:'Element not found: '+s};el.scrollIntoView({block:'center'});el.click();return{clicked:true,tag:el.tagName,text:(el.textContent||'').trim().slice(0,60)}})()\"}" \
+  api_post "/evaluate" "$payload" \
     | bun -e '
 try {
   const d = JSON.parse(await Bun.stdin.text()).result ?? {};
@@ -214,7 +219,8 @@ console.log(`Screenshot saved: ${process.env.SCREENSHOT_PATH} (${Math.floor(img.
   key)
     key="${ARGS[1]:-}"
     [[ -z "$key" ]] && echo "Usage: browser-cli.sh key <key>" && exit 1
-    api_post "/key" "{\"key\":\"$key\"}" >/dev/null
+    key_json="$(json_string "$key")"
+    api_post "/key" "{\"key\":${key_json}}" >/dev/null
     echo "Pressed: $key"
     ;;
 
@@ -244,8 +250,9 @@ console.log(typeof r === "object" ? JSON.stringify(r, null, 2) : String(r));
     url="${ARGS[1]:-}"
     [[ -z "$url" ]] && echo "Usage: browser-cli.sh gather <url>" && exit 1
     # Clear traffic, navigate, wait, return snapshot + traffic
+    url_json="$(json_string "$url")"
     api_post "/traffic/clear" '{}' >/dev/null
-    api_post "/navigate" "{\"url\":\"$url\"}" >/dev/null
+    api_post "/navigate" "{\"url\":${url_json}}" >/dev/null
     echo "Navigating to: $url"
     sleep 5
     echo ""

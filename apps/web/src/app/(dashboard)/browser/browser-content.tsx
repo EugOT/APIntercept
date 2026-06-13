@@ -1,13 +1,14 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Omnibar } from '@/components/browser/omnibar';
 import {
 	RemoteBrowserViewer,
 	type RemoteBrowserViewerHandle,
 } from '@/components/browser/remote-viewer';
 import { Button } from '@/components/ui/button';
+import { withWebSocketTicket } from '@/lib/control-auth';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'ready' | 'disconnected' | 'error';
 
@@ -28,12 +29,14 @@ export default function BrowserContent() {
 	const [frameCount, setFrameCount] = useState(0);
 	const [domainInfo, setDomainInfo] = useState<DomainInfo | null>(null);
 	const [warmingUp, setWarmingUp] = useState(false);
+	const [wsUrl, setWsUrl] = useState('');
 	const wsRef = useRef<WebSocket | null>(null);
 	const viewerRef = useRef<RemoteBrowserViewerHandle | null>(null);
 
 	// Build WebSocket URL from search params — supports any domain
 	// Usage: /browser?profile=example&capture=example.com&url=https://example.com
-	const wsUrl = useMemo(() => {
+	const baseWsUrl = useMemo(() => {
+		if (typeof window === 'undefined') return '';
 		const params = new URLSearchParams();
 		const profile = searchParams.get('profile') || 'generic';
 		const capture = searchParams.get('capture') || '';
@@ -44,6 +47,19 @@ export default function BrowserContent() {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		return `${protocol}//${window.location.host}/browser/stream?${params.toString()}`;
 	}, [searchParams]);
+
+	useEffect(() => {
+		if (!baseWsUrl) return;
+		let cancelled = false;
+
+		withWebSocketTicket(baseWsUrl).then((urlWithTicket) => {
+			if (!cancelled) setWsUrl(urlWithTicket);
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [baseWsUrl]);
 
 	const handleWsRef = useCallback((ws: WebSocket | null) => {
 		wsRef.current = ws;
@@ -179,20 +195,22 @@ export default function BrowserContent() {
 
 			{/* Browser canvas — fills remaining space */}
 			<div className="flex-1 overflow-hidden bg-muted">
-				<RemoteBrowserViewer
-					key={wsUrl}
-					wsUrl={wsUrl}
-					width={1024}
-					height={576}
-					onStatusChange={setStatus}
-					onWsRef={handleWsRef}
-					onFrameCount={setFrameCount}
-					onUrl={handleUrlChange}
-					onMessage={handleMessage}
-					autoConnect={true}
-					onConnectRef={handleConnectRef}
-					className="flex h-full items-center justify-center p-4"
-				/>
+				{wsUrl && (
+					<RemoteBrowserViewer
+						key={wsUrl}
+						wsUrl={wsUrl}
+						width={1024}
+						height={576}
+						onStatusChange={setStatus}
+						onWsRef={handleWsRef}
+						onFrameCount={setFrameCount}
+						onUrl={handleUrlChange}
+						onMessage={handleMessage}
+						autoConnect={true}
+						onConnectRef={handleConnectRef}
+						className="flex h-full items-center justify-center p-4"
+					/>
+				)}
 			</div>
 		</div>
 	);
