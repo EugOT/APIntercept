@@ -16,11 +16,11 @@
  */
 
 import type { DomainPlugin } from '@interceptor/browser/handler/domain-loader';
-import { verifyCredentials } from './api-client';
-import { boardShopInterceptorConfig } from './config';
-import { BoardShopInterceptor } from './interceptor';
-import { routes } from './routes';
-import { BoardShopSessionManager } from './session-manager';
+import { verifyCredentials } from './api-client.js';
+import { boardShopInterceptorConfig } from './config.js';
+import { BoardShopInterceptor } from './interceptor.js';
+import { routes } from './routes.js';
+import { BoardShopSessionManager } from './session-manager.js';
 
 export const plugin: DomainPlugin = {
 	domainName: 'boardshop',
@@ -61,7 +61,7 @@ export const plugin: DomainPlugin = {
 	onLoginDetected: () => ({ type: 'boardshop_login_detected' }),
 };
 
-export { boardShopInterceptorConfig } from './config';
-export { BoardShopInterceptor } from './interceptor';
-export { routes } from './routes';
-export { BoardShopSessionManager } from './session-manager';
+export { boardShopInterceptorConfig } from './config.js';
+export { BoardShopInterceptor } from './interceptor.js';
+export { routes } from './routes.js';
+export { BoardShopSessionManager } from './session-manager.js';

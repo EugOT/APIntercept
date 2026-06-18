@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fullLists, PlaywrightBlocker, type Request } from '@ghostery/adblocker-playwright';
 import fetch from 'cross-fetch';
 import type { Page } from 'patchright';
-import { type BrowserConfig, getBrowserConfig } from './config';
+import { type BrowserConfig, getBrowserConfig } from './config.js';
 
 // =============================================================================
 // Types

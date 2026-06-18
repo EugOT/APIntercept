@@ -14,8 +14,8 @@
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getProfilePath } from '../remote/profiles';
-import type { GenericSession, SessionEvent, SessionEventType, SessionStatus } from './types';
+import { getProfilePath } from '../remote/profiles.js';
+import type { GenericSession, SessionEvent, SessionEventType, SessionStatus } from './types.js';
 
 /**
  * Default max age for sessions (30 days - browser cookies last this long).

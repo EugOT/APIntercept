@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserContext, CDPSession, Page, Route } from 'patchright';
 import { chromium } from 'patchright';
-import { BlockerManager } from '../blocker';
+import { BlockerManager } from '../blocker.js';
 import type {
 	CDPLoadingFailed,
 	CDPLoadingFinished,
@@ -28,7 +28,7 @@ import type {
 	CDPWebSocketClosed,
 	CDPWebSocketCreated,
 	CDPWebSocketFrameReceived,
-} from './cdp-types';
+} from './cdp-types.js';
 
 // Rate limiter integration for browserFetch — injected at startup to avoid circular deps
 let rateLimitWait: ((url: string) => Promise<void>) | null = null;
@@ -804,7 +804,7 @@ export class RemoteBrowserService {
 			});
 
 			// Import logger dynamically to avoid circular deps
-			const { browserLogger } = await import('./logger');
+			const { browserLogger } = await import('./logger.js');
 			browserLogger.lifecycle('fingerprint', {
 				...fingerprint,
 				nodeEnv: process.env.NODE_ENV,

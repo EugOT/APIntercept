@@ -16,9 +16,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getDomain } from '../handler/domain-loader.js';
-import { type ClientGenerationConfig, generateClientFile } from './client-codegen';
-import { inferRequestSchema, inferResponseSchema } from './schema-inferencer';
-import { analyzeTraffic, summarizePatterns } from './traffic-analyzer';
+import { type ClientGenerationConfig, generateClientFile } from './client-codegen.js';
+import { inferRequestSchema, inferResponseSchema } from './schema-inferencer.js';
+import { analyzeTraffic, summarizePatterns } from './traffic-analyzer.js';
 
 /**
  * Parse command-line arguments.

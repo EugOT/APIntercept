@@ -12,11 +12,11 @@
  */
 
 // Blocker
-export { BlockerManager, getBlockerManager } from './blocker';
+export { BlockerManager, getBlockerManager } from './blocker.js';
 // Config
-export { type BrowserConfig, getBrowserConfig } from './config';
+export { type BrowserConfig, getBrowserConfig } from './config.js';
 // Browser pool
-export { BrowserPool, getBrowserPool } from './pool';
+export { BrowserPool, getBrowserPool } from './pool.js';
 // Scraper Registry
 export {
 	createHealthCheck,
@@ -30,7 +30,7 @@ export {
 	type ScraperRateLimit,
 	ScraperRegistry,
 	type ScraperSchedule,
-} from './registry';
+} from './registry.js';
 // Stealth configuration (UA pools, args, headers)
 export {
 	buildFetchHeaders,
@@ -43,9 +43,9 @@ export {
 	getRandomMobileUA,
 	MOBILE_USER_AGENTS,
 	STEALTH_BROWSER_ARGS,
-} from './stealth';
+} from './stealth.js';
 // Stealth browser
-export { type BrowserOptions, createBrowser, createBrowserContext } from './stealth-browser';
+export { type BrowserOptions, createBrowser, createBrowserContext } from './stealth-browser.js';
 
 // Types
 export {
@@ -61,4 +61,4 @@ export {
 	type ScraperErrorType,
 	type ScraperOptions,
 	scraperError,
-} from './types';
+} from './types.js';

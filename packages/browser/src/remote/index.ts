@@ -3,8 +3,8 @@
  * @module browser/remote
  */
 
-export { BrowserLifecycleManager } from './browser-manager';
-export { browserLogger } from './logger';
+export { BrowserLifecycleManager } from './browser-manager.js';
+export { browserLogger } from './logger.js';
 export {
 	cleanProfile,
 	createProfile,
@@ -16,11 +16,11 @@ export {
 	type ProfileInfo,
 	profileExists,
 	validateProfileName,
-} from './profiles';
+} from './profiles.js';
 export {
 	connectBrowserRateLimiter,
 	type FrameCallback,
 	type FrameData,
 	RemoteBrowserService,
 	type StreamConfig,
-} from './service';
+} from './service.js';

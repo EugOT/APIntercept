@@ -1,4 +1,4 @@
-import type { AppConfig } from './types';
+import type { AppConfig } from './types.js';
 
 const VALID_ENVIRONMENTS = ['development', 'production', 'test'] as const;
 

@@ -8,7 +8,7 @@ import {
 	type RemoteBrowserViewerHandle,
 } from '@/components/browser/remote-viewer';
 import { Button } from '@/components/ui/button';
-import { withWebSocketTicket } from '@/lib/control-auth';
+import { createWebSocketUrl, withWebSocketTicket } from '@/lib/control-auth';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'ready' | 'disconnected' | 'error';
 
@@ -44,8 +44,7 @@ export default function BrowserContent() {
 		params.set('profile', profile);
 		if (capture) params.set('capture', capture);
 		if (startUrl) params.set('url', startUrl);
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		return `${protocol}//${window.location.host}/browser/stream?${params.toString()}`;
+		return createWebSocketUrl(`/browser/stream?${params.toString()}`);
 	}, [searchParams]);
 
 	useEffect(() => {

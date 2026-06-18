@@ -7,7 +7,7 @@
  * @module browser/codegen/client-codegen
  */
 
-import type { EndpointPattern } from './traffic-analyzer';
+import type { EndpointPattern } from './traffic-analyzer.js';
 
 /**
  * Configuration for client generation.

@@ -1,5 +1,5 @@
 import type { InterceptorConfig } from '@interceptor/browser/shared/config';
-import { BoardShopHeadersSchema, REQUIRED_HEADER_NAMES } from './types';
+import { BoardShopHeadersSchema, REQUIRED_HEADER_NAMES } from './types.js';
 
 export const boardShopInterceptorConfig: InterceptorConfig = {
 	domainName: 'boardshop',

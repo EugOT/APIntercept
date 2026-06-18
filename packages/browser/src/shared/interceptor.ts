@@ -8,8 +8,8 @@
  */
 
 import type { Page, Request, Route } from 'patchright';
-import type { InterceptorConfig } from './config';
-import type { InterceptedRequest, InterceptedResponse, InterceptionCallback } from './types';
+import type { InterceptorConfig } from './config.js';
+import type { InterceptedRequest, InterceptedResponse, InterceptionCallback } from './types.js';
 
 /**
  * Abstract base class for domain-specific interceptors.

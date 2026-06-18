@@ -11,8 +11,8 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserContext, Page } from 'patchright';
 import { chromium } from 'patchright';
-import { BlockerManager } from '../blocker';
-import type { GenericInterceptor } from './interceptor';
+import { BlockerManager } from '../blocker.js';
+import type { GenericInterceptor } from './interceptor.js';
 
 /**
  * Authentication state discriminated union.
