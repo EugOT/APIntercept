@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { UpgradeWebSocket, WSContext } from 'hono/ws';
-import { getBridge } from './bridge';
+import { getBridge } from './bridge.js';
 import {
 	addClient,
 	getState,
@@ -9,7 +9,7 @@ import {
 	setMultiplier,
 	setRunning,
 	type WsClient,
-} from './state';
+} from './state.js';
 
 type InboundMessage =
 	| { type: 'increment' }

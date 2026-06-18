@@ -21,13 +21,13 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 import { createInterface, type Interface } from 'node:readline';
-import { DEBUG } from '../debug';
+import { DEBUG } from '../debug.js';
 import {
 	BridgeError,
 	type BridgeReadyMessage,
 	type BridgeResponse,
 	type PythonBridgeConfig,
-} from './types';
+} from './types.js';
 
 function nonEmpty(value: string | undefined): string | undefined {
 	return value && value.trim().length > 0 ? value : undefined;

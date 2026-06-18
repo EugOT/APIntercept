@@ -27,7 +27,7 @@ import { cors } from 'hono/cors';
 import { WSContext } from 'hono/ws';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
-import './register-domains'; // Side-effect: registers domain plugins
+import './register-domains.js'; // Side-effect: registers domain plugins
 
 // Connect rate limiter to browserFetch so Chrome-based fetches respect rate limits
 connectBrowserRateLimiter({
@@ -36,9 +36,9 @@ connectBrowserRateLimiter({
 	release: releaseRateLimitSlot,
 });
 
-import { getBridge } from './bridge';
-import { browserMcp } from './browser-mcp';
-import { formatStartupBanner } from './format';
+import { getBridge } from './bridge.js';
+import { browserMcp } from './browser-mcp.js';
+import { formatStartupBanner } from './format.js';
 import {
 	CONTROL_TOKEN_HEADER,
 	createSecurityConfig,
@@ -47,15 +47,22 @@ import {
 	isAuthorizedUpgrade,
 	PayloadTooLargeError,
 	readRequestBody,
-} from './security';
-import { addClient, getState, removeClient, resetState, setMultiplier, setRunning } from './state';
+} from './security.js';
+import {
+	addClient,
+	getState,
+	removeClient,
+	resetState,
+	setMultiplier,
+	setRunning,
+} from './state.js';
 
+const securityConfig = createSecurityConfig();
 const config = validateConfig({
 	name: 'interceptor-api',
 	version: '0.0.1',
-	environment: process.env.NODE_ENV ?? 'development',
+	environment: securityConfig.environment,
 });
-const securityConfig = createSecurityConfig();
 const WS_TICKET_TTL_MS = 60_000;
 const wsTickets = new Map<string, number>();
 

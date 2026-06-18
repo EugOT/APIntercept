@@ -11,7 +11,7 @@
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createBrowserMcpServer } from './server';
+import { createBrowserMcpServer } from './server.js';
 
 async function main() {
 	const apiUrl = process.env.INTERCEPTOR_API_URL || 'http://localhost:3001';

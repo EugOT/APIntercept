@@ -21,7 +21,7 @@ import {
 	OrderResponseSchema,
 	type PaginatedBoards,
 	PaginatedBoardsSchema,
-} from './types';
+} from './types.js';
 
 const API_BASE = 'https://api.boardshop.example.com/v1';
 

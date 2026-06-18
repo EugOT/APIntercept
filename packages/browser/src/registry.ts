@@ -33,7 +33,7 @@
  * @module @interceptor/browser/registry
  */
 
-import type { Result, ScraperError } from './types';
+import type { Result, ScraperError } from './types.js';
 
 // =============================================================================
 // Types

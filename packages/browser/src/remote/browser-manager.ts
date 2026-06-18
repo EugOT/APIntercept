@@ -9,7 +9,7 @@
  * @module browser/remote
  */
 
-import type { RemoteBrowserService } from './service';
+import type { RemoteBrowserService } from './service.js';
 
 /**
  * Simple async mutex for serializing browser operations

@@ -1,5 +1,16 @@
 const CONTROL_TOKEN_STORAGE_KEYS = ['interceptorControlToken', 'INTERCEPTOR_CONTROL_TOKEN'];
 
+function trimTrailingSlash(value: string): string {
+	return value.replace(/\/+$/, '');
+}
+
+function normalizeWebSocketBase(value: string): string {
+	const trimmed = trimTrailingSlash(value.trim());
+	if (trimmed.startsWith('http://')) return `ws://${trimmed.slice('http://'.length)}`;
+	if (trimmed.startsWith('https://')) return `wss://${trimmed.slice('https://'.length)}`;
+	return trimmed;
+}
+
 function readTokenFromStorage(storage: Storage): string | null {
 	for (const key of CONTROL_TOKEN_STORAGE_KEYS) {
 		const token = storage.getItem(key)?.trim();
@@ -16,6 +27,17 @@ export function getControlToken(): string | null {
 	} catch {
 		return null;
 	}
+}
+
+export function createWebSocketUrl(pathAndQuery: string): string {
+	if (typeof window === 'undefined') return pathAndQuery;
+
+	const normalizedPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+	const configuredBase = process.env.NEXT_PUBLIC_INTERCEPTOR_WS_URL?.trim();
+	if (configuredBase) return `${normalizeWebSocketBase(configuredBase)}${normalizedPath}`;
+
+	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+	return `${protocol}//${window.location.host}${normalizedPath}`;
 }
 
 export async function createWebSocketTicket(): Promise<string | null> {

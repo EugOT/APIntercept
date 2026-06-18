@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { withWebSocketTicket } from '@/lib/control-auth';
+import { createWebSocketUrl, withWebSocketTicket } from '@/lib/control-auth';
 
 interface Stats {
 	mean: number;
@@ -45,8 +45,7 @@ export default function MultiplierPanel() {
 		let cancelled = false;
 
 		async function connect() {
-			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			const wsUrl = await withWebSocketTicket(`${protocol}//${window.location.host}/ws`);
+			const wsUrl = await withWebSocketTicket(createWebSocketUrl('/ws'));
 			if (cancelled) return;
 
 			ws = new WebSocket(wsUrl);

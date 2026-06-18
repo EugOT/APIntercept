@@ -31,7 +31,9 @@ if [ "$WEB_ONLY" = false ]; then
   echo "API server starting on port 3001..."
 fi
 if [ "$API_ONLY" = false ]; then
-  bun run --filter @interceptor/web dev > /tmp/web-server.log 2>&1 &
+  INTERCEPTOR_API_URL="${INTERCEPTOR_API_URL:-http://localhost:3001}" \
+    NEXT_PUBLIC_INTERCEPTOR_WS_URL="${NEXT_PUBLIC_INTERCEPTOR_WS_URL:-ws://localhost:3001}" \
+    bun run --filter @interceptor/web dev > /tmp/web-server.log 2>&1 &
   echo "Web server starting on port 3000..."
 fi
 

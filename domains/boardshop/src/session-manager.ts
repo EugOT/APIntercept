@@ -17,7 +17,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getProfilePath } from '@interceptor/browser/remote/profiles';
-import type { BoardShopHeaders, SessionEventType, SessionStatus } from './types';
+import type { BoardShopHeaders, SessionEventType, SessionStatus } from './types.js';
 
 /** Persisted session data */
 export interface BoardShopSession {

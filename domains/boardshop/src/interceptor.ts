@@ -13,8 +13,8 @@
 
 import { GenericInterceptor } from '@interceptor/browser/shared/interceptor';
 import type { Route } from 'patchright';
-import { boardShopInterceptorConfig } from './config';
-import type { BoardShopHeaders } from './types';
+import { boardShopInterceptorConfig } from './config.js';
+import type { BoardShopHeaders } from './types.js';
 
 export class BoardShopInterceptor extends GenericInterceptor {
 	constructor() {
